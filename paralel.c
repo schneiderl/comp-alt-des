@@ -33,6 +33,7 @@ int local_size = 0;
 
 int node_count;
 int my_rank;
+int STOP_TIME = 0;
 
 MPI_Status mpi_status;
 
@@ -87,15 +88,10 @@ void read_array(void)
 void print_array(int *a, int size)
 {
     int i = 0;
-
     for (; i < size; ++i)
     {
-        printf(" %5d", a[i]);
-
-        if ((i + 1) % 16 == 0)
-            printf("\n");
+        printf(" %d", a[i]);
     }
-    puts("");
 }
 
 int getNextRank()
@@ -155,7 +151,6 @@ void odd_even_sort(int odd_even)
     if (odd_even == 0)
     {
         int leftValue, rightValue = MAX_SIZE;
-
         if (leftRankExists())
         {
             send(&local[0], 1, getPrevRank(), TAG_VALUE);
@@ -219,10 +214,13 @@ int arraySortedCheck(int arr[], int n)
 
 int main(int argc, char *argv[])
 {
+
     int i, rc = MPI_Init(&argc, &argv);
 
     rc |= MPI_Comm_size(MPI_COMM_WORLD, &node_count);
     rc |= MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
+
+    double start = MPI_Wtime();
 
     if (rc != MPI_SUCCESS)
     {
@@ -236,25 +234,40 @@ int main(int argc, char *argv[])
     {
         printf("INPUT              :");
         print_array(array, array_size);
+        printf("\n");
     }
     for (int i = 1; i < MAX_SIZE; i++)
     {
+        
+
         MPI_Scatter(array, array_size / node_count, MPI_INT, local, array_size / node_count, MPI_INT, 0, MPI_COMM_WORLD);
         odd_even_sort(i % 2);
 
         MPI_Barrier(MPI_COMM_WORLD);
 
         MPI_Gather(local, array_size / node_count, MPI_INT, array, array_size / node_count, MPI_INT, 0, MPI_COMM_WORLD);
-
         if (is_master())
-        {
+        {   
             if (arraySortedCheck(array, array_size))
             {
-                printf("SORTED ARRAY\n");
+                printf("OUTPUT             :");
                 print_array(array, array_size);
-                break;
+                printf("\n");
+                STOP_TIME = 1;
             }
         }
+        MPI_Bcast(&STOP_TIME, 1, MPI_INT, 0, MPI_COMM_WORLD);
+
+        if (STOP_TIME == 1)
+        {
+            break;
+        }
+    }
+
+    double end = MPI_Wtime();
+
+    if (is_master()){
+        printf("TOTAL TIME SPENT: %f", end-start);
     }
 
     MPI_Finalize();
